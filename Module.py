@@ -2,42 +2,172 @@
 from time import *
 import getpass
 import traceback
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+import pyautogui
 from slacker import Slacker
 from datetime import *
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from appium.webdriver.common.touch_action import TouchAction
+from selenium.webdriver.support.ui import WebDriverWait
+import numpy as np
+import sys
+from datetime import *
 
 username = getpass.getuser()
 carmore_store = '/Users/' + username + '/Downloads/렌트카 카모아 - 국내 해외 렌터카 1등_4.1.29_Apkpure.apk'
 carmore_test = '/Users/' + username + '/Downloads/dev_carmore_4.1.36.apk'
 tmap ='/Users/' + username + '/Downloads/TMAP  10.0.0.291979.apk'
-
+now = datetime.now()
 if username == 'joy':
     # Galaxy S23+
-    deviceID = '192.168.1.5:5555'
-    platformVersion = '14'
+    deviceID = '192.168.0.255:5555'
     deviceName = 'S23+'
-elif username == 'levi': #elif를 통해 levi 추가(levi)
-     deviceID = '192.168.1.4:5555'
-     platformVersion = '13'
-     deviceName = 'S23'
+    platformVersion = '14'
+    # Galaxy S10
+    # deviceID = '192.168.0.127:5555'
+    # platformVersion = '12'
+    # deviceName = 'S10'
+def wait_sec():
+    server = argv()
+    if server == 'dev':
+        wait_sec = 20
+    else:
+        wait_sec = 15
+    return int(wait_sec)
+# elif username == 'levi': #elif를 통해 levi 추가(levi)
+#      deviceID = '192.168.1.4:5555'
+#      platformVersion = '13'
+#      deviceName = 'S23'
+# else:
+#     deviceID = '192.168.0.228:5555'
+def argv():
+    return f"{sys.argv[1]}"
+#------------------------------------------- slack post message_start ----------------------------------------------------------------------------------
+slack_token = '{slack api token}'
+client = WebClient(token=slack_token)
+channel_id = "#qa_android_자동화테스트_결과"
+slack = Slacker(slack_token)
+if argv() == 'live' or argv() == 'tmap':
+    title = '[Live][상시] 리그레션 자동화 테스트'
+elif argv() == 'stage':
+    title = '[STAGE][] 리그레션 자동화 테스트'
 else:
-    deviceID = '192.168.0.228:5555'
+    title = '[DEV][결제정보_리팩토링] 리그레션 자동화 테스트'
 
-def slack_post(result):
-    slack = Slacker('{API 키}')
-    slack.chat.post_message('#{슬랙 채널명}', str(result), '{스레드명}', None, None, None, None, None,None, None, ':100-billion:')
+def slack_post(result): #pass용
+    slack.chat.post_message('#qa_android_자동화테스트_결과', str(result), title , None, None, None, None, None,None, None, ':arong:')
+    # pass
 
-def server(wait):
-    sleep(2)
-    try:
+def slack_post_img(file_path,result): #fail용
+    # print('이미지 주석 처리 중')
+    response = client.files_upload(
+        channels=channel_id,
+        file=file_path,
+        title=str(now),
+        initial_comment =str(result)
+    )
+    # 전송 후 응답 출력
+    print(f"File uploaded: {response['file']['id']}")
+
+#------------------------------------------- slack post message_end ----------------------------------------------------------------------------------
+
+def carmoreOpen(driver,wait):
+    server = argv()
+    driver.terminate_app('com.gogocarhome.gogocar')
+    driver.activate_app('com.gogocarhome.gogocar')
+    sleep(3)
+    if server == 'live':
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="실서버"]'))).click()
-        sleep(1)
-        wait.until(EC.presence_of_element_located((By.ID, 'android:id/button1'))).click()
-        sleep(3)
+    elif server == 'stage':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="스테이징서버"]'))).click()
+    elif server == 'dev':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="개발 1서버"]'))).click()
+    sleep(2)
+    wait.until(EC.presence_of_element_located((By.ID, 'android:id/button1'))).click()
+    # if server == 'live':
+    #     sleep(4)
+    #     try:
+    #         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]')))
+    #         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"-")]')))  # 개발서버로 드러와짐
+    #     except:
+    #         driver.terminate_app('com.gogocarhome.gogocar')
+    #         driver.activate_app('com.gogocarhome.gogocar')
+    #         sleep(3)
+    #         if server == 'live':
+    #             wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="실서버"]'))).click()
+    #         elif server == 'stage':
+    #             wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="스테이징서버"]'))).click()
+    #         elif server == 'dev':
+    #             wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="개발 1서버"]'))).click()
+    #         sleep(1)
+    #         wait.until(EC.presence_of_element_located((By.ID, 'android:id/button1'))).click()
+
+    #서버 첫 시작 케이스 때문에 홈 검증 없애야함.
+
+def tmapOpen(driver,wait):
+    driver.terminate_app('com.skt.tmap.ku')
+    driver.activate_app('com.skt.tmap.ku')
+    try:
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"오늘은 그만보기")]'))).click()# 두번 노출될 가능성 있음.
     except:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]')))
+        pass
+    # 렌터카 클릭하기
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="렌터카"]'))).click()
+    sleep(2)
+    # 카모아 진입 확인
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"단기렌트")]')))
+    print("Module-T-exception 완료")
+
+def login(wait):
+    sleep(3)#너무 빨리 눌리면 안됨
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"카카오톡으로 로그인")]'))).click()
+    try:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"즐거운 여정 시작하기")]'))).click()
+    except:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="닫기"]'))).click()
+    # sleep(3)  # 너무 빨리 눌리면 안됨
+    # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"네이버로 로그인")]'))).click()
+    # sleep(3)
+    # try:
+    #     wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="joyto2"]'))).click()
+    # except:
+    #     pass
+    # try:
+    #     wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="닫기"]'))).click()
+    # except:
+    #     wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"즐거운 여정 시작하기")]'))).click()
+
+def logout(driver,wait):
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"홈")]'))).click()
+    sleep(3)
+    wait.until(EC.presence_of_element_located(
+        (By.XPATH, '//*[contains(@text,"My")]'))).click()
+    try:
+        wait.until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@text="가입 / 로그인 하기"]')))
+        print("이미 로그아웃 되어 있음")
+    except:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="마이페이지"]')))
+        down_swipe(driver)
+        down_swipe(driver)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="내 정보 관리"]'))).click()
+        sleep(2)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="로그아웃"]'))).click()
+        sleep(2)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click() #로그아웃 최종 확인 모달임. 
+        if argv() == 'live':
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="실서버"]'))).click()
+        elif argv() == 'stage':
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="스테이징서버"]'))).click()
+        elif argv() == 'dev':
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="개발 1서버"]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.ID, 'android:id/button1'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="홈"]')))
+    print("Module-logout 완료")
 
 # 세션 유지 후 앱 실행
 def Setting_Reset(reset):
@@ -93,134 +223,249 @@ def Setting_Reset(reset):
 
     return desired_caps
 
-def login(wait):
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"카카오톡으로 로그인")]'))).click()
-    try:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"즐거운 여정 시작하기")]'))).click()
-    except:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="닫기"]'))).click()
-    print("실서버 Module-login 완료")
-
-def logout(driver,wait):
-    wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"홈")]'))).click()
+def select_Region(wait,step1,step2):
     sleep(3)
-    wait.until(EC.presence_of_element_located(
-        (By.XPATH, '//*[contains(@text,"My")]'))).click()
-    try:
-        wait.until(
-            EC.element_to_be_clickable((By.XPATH, '//*[@text="가입 / 로그인 하기"]')))
-        print("이미 로그아웃 되어 있음")
-    except:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="마이페이지"]')))
-        down_swipe(driver)
-        down_swipe(driver)
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="내 정보 관리"]'))).click()
-        sleep(4)
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="로그아웃"]'))).click()
+    wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.Button)[4]'))).click()
+    if step1 == '미국' or step1 == '일본' or step1 == '이탈리아':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="해외 지역 선택"]')))
+    else:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="국내 지역 선택"]')))
+    if step1 == '제주':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="' + step1 + ' ' + step1 + '"]'))).click()
+    sleep(2)
+    if step2 == 'LAX':
         sleep(2)
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()
-        sleep(5)
-        server(wait)
-        wait.until(EC.presence_of_element_located(
-            (By.XPATH, '//*[@text="홈"]')))
-    print("Module-logout 완료")
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"해외 지역명, 역")]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("LAX")
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//*[contains(@text,"Los Angeles")])[1]'))).click()
+    if step2 == '괌':
+        sleep(2)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"해외 지역명, 역")]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("괌")
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//*[contains(@text,"Guam")])[1]'))).click()
+    elif step2 == '제주국제공항':
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"제주도 전체")]'))).click()
+        sleep(2)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="제주국제공항"]')))
+    elif step2 == '인천':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="인천"]'))).click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="서구"]'))).click()
+    elif step2 == '후쿠오카 공항':
+        sleep(2)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"해외 지역명, 역")]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("후쿠오카")
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//*[contains(@text,"Airport")])[1]'))).click()
 
-def exception(driver,wait):
-    driver.terminate_app('com.gogocarhome.gogocar')
-    driver.activate_app('com.gogocarhome.gogocar')
-    sleep(5)
-    server(wait)
-    try:
-        try:
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"홈")]'))).click()
-        except:
-            try:
-                wait.until(EC.presence_of_element_located((By.XPATH, '//android.widget.Button[@text="허용"]'))).click()
-            except:
-                pass
-            wait.until(EC.presence_of_element_located((By.XPATH, '//android.widget.Button[@text="모든 권한 허용하기"]'))).click()
-            wait.until(EC.presence_of_element_located((By.XPATH, '//android.widget.Button[@text="앱 사용 중에만 허용"]'))).click()
-            wait.until(EC.presence_of_element_located((By.XPATH, '//android.widget.Button[@text="허용"]'))).click()  # 4.1.28 부터 생김
-            try:
-                wait.until(EC.presence_of_element_located((By.XPATH, '//android.widget.Button[@text="허용"]'))).click()  # 알림 허용
-            except:
-                pass
-            sleep(5)
-            TouchAction(driver).tap(x=532, y=1971).perform()  # 시작하기 버튼 클릭
-            sleep(5)
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]'))).click()
-        try:
-            logout(driver,wait)
-        except:
-            pass
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]'))).click()
-    except:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@name="홈"]'))).click()
+    elif step2 == '로마':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"해외 지역명, 역")]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("로마")
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"로마 테르미니역")]'))).click()
 
-    print("Module-exception 완료")
-
-def L_exception(driver,wait):
-
-    driver.terminate_app('com.gogocarhome.gogocar')
-    driver.activate_app('com.gogocarhome.gogocar')
-    sleep(5)
-    server(wait)
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]')))
-    print("app restart")
+def Payment(what,wait,who,pay):
+    #what = 'ktx','jeju','k_short', 'month', 'overseas'
+    if what == 'jeju' or what == 'k_short' or what == 'month' or what == 'solo' or what == 'package' or what == 'k_dev' or what == 'm_dev' or what =='h_dev':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[contains(@text,"결제하기")]'))).click() #단기렌트, 월렌트
+    elif what == 'o_short_direct' or what == 'o_short_api'or what == 'o_dev' :
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[contains(@text,"예약하기")]'))).click() #해외렌트
+    elif what == 'insurance':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="다음"]'))).click()
+    else:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"예매하기")]'))).click() #ktx
     sleep(3)
-    wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"My")]'))).click()
-    sleep(5)
-    try:
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"예약내역")]')))
-    except:
-        wait.until(
-        EC.element_to_be_clickable((By.XPATH, '//*[@text="가입 / 로그인 하기"]'))).click()
-        login(wait)
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]'))).click()
-    print("Module-L-exception 완료")
-
-def T_exception(driver,wait):
-    driver.terminate_app('com.skt.tmap.ku')
-    driver.activate_app('com.skt.tmap.ku')
-    try:
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="렌터카"]'))).click()
-    except:
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"업데이트")]')))
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="닫기"]'))).click()  # 개발섭이라 노출되는 팝업
-    # try:
-    #     wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"오늘은 그만보기")]'))).click()# 두번 노출될 가능성 있음.
-    # except:
-    #     pass
-    # # 렌터카 클릭하기
-    # wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="렌터카"]'))).click()
-    sleep(5)
-    # 카모아 진입 확인
-    wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"단기렌트")]')))
-    print("Module-T-exception 완료")
-
-def hotel_Coupon(where, amount,wait):
-    coupon_available ='yes'
-    if where == '제주' and amount >= 100000 and amount < 200000:
-        coupon = '3,000'
-    elif where == '제주' and amount >= 200000:
-        coupon = '7,000'
-    elif where == '내륙' and amount >= 150000 and amount < 500000:
-        coupon = '6,000'
-    elif where == '내륙' and amount >= 500000:
-        coupon = '20,000'
-    elif where == '해외' and amount >= 150000:
-        coupon = '7,000'
-    elif where == '해외' and amount >= 400000:
-        coupon = '15,000'
+    ansim ='no check'
+    ansim_amount = '0'
+    if what == 'jeju' or what == 'k_short' or what == 'k_dev' or what == 'o_short_direct':
+        # 안심플러스 팝업 확인하기
+        if (what == 'jeju' or what == 'k_short' or what == 'k_dev') and who =='carmore':
+            sleep(2)
+            try:
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.TextView[@text="안심플러스⁺로 안전한 휴가 보내세요!"]'))).click()
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="1인"]')))
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="1,900원"]')))
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="[필수] 가입 안내 및 개인정보 처리 동의"]'))).click()
+                sleep(2)
+                if what == 'k_dev':
+                    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="안심플러스⁺ 하고 혜택받기"]'))).click()
+                    ansim = 'check'
+                    ansim_amount = '1900'
+                else:
+                    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="혜택 받지 않기"]'))).click()
+            except:
+                print("안심플러스 미 판매 조건인지 확인 필요")
+        else:
+            print('티매 렌터카 안심플러스 미 판매')
+        # 자차플러스 팝업 확인하기
+        if ansim == 'check':
+            print("안심플러스 체크해서 자차플러스 팝업 미 확인")
+        else:
+            try:
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="자차플러스하고 혜택 받기"]')))
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="혜택 받지 않기"]'))).click() #정형화되었을 때 뜨는 팝업 (제주 리본/파트너스 , 내륙 아직 미적용)
+            except:
+                print("자차플러스 미 판매 업체")
     else:
-        coupon_available ='no'
-        coupon =0
-
-    if coupon_available =='yes':
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"3초 가입하고 ' + str(coupon) + '원 할인받기!")]')))
-    else:
+        print('안심플러스 자차플러스 미 판매 렌트타입')
+    # 최종 결제 확인 모달 결제하기 클릭 (보험, 호텔은 없음)
+    if what == 'insurance' or what == 'package' or what == 'solo' or what == 'h_dev':
         pass
+    else:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="차량정보"]')))
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="결제하기"]'))).click()
+    sleep(3)
+    #토스 위젯 진입
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="결제 방법"]')))
+    try:
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="'+pay+'"]'))).click()
+    except:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"더보기")]'))).click()
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="'+pay+'"]'))).click()
+    if pay == '신용·체크카드':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="카카오뱅크"]')))
+        if what != 'k_dev' and what != 'o_dev' and what != 'm_dev' and what != 'h_dev':
+            print('결제하기 테스트를 하면 안되는 애들')
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="농협"]'))).click()
+        else:
+            print('개발서버다 결제하기 테스트 고고')
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="국민"]'))).click()
+            if who == 'carmore':
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="결제하기"]'))).click()  # 카모아
+                print('카모아 전용 결제하기 누름')
+            else:
+                wait.until(EC.element_to_be_clickable((By.XPATH, '(//*[@text="결제하기"])[2]'))).click()  # 티맵
+                print('티맵 전용 결제하기 누름')
+            sleep(2)
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="앱 없이 결제"]'))).click()
+            sleep(2)
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="간편 로그인"]')))
+            wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("01074714756") #휴대폰번호
+            wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[2]'))).send_keys("9710212") #주민등록번호 앞 7자리
+            sleep(2)
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="개인정보 수집이용 동의"]'))).click()
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="로그인"]'))).click()
+            sleep(2)
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="포인트리"]')))
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="결제하기"]'))).click()
+            key = [7,8,5,8,4,8]
+            for i in range (0,7):
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text='+str(key[i])+']'))).click()
+    if pay == '간편카드결제':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="일시불"]')))
+        if what != 'k_dev' and what != 'o_dev' and what != 'm_dev' and what != 'h_dev':
+            print('결제하기 테스트를 하면 안되는 애들')
+        else:
+            sleep(5)
+            print('개발서버만 들어올 수 있는 결제 버튼')
+            if who == 'carmore':
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="결제하기"]'))).click()  # 카모아
+                print('카모아 전용 결제하기 누름')
+            else:
+                wait.until(EC.element_to_be_clickable((By.XPATH, '(//*[@text="결제하기"])[2]'))).click()  # 티맵
+                print('티맵 전용 결제하기 누름')
+    else:
+        print('간편카드결제가 아니므로 결제하기 누르기')
+        if who == 'carmore':
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="결제하기"]'))).click()  # 카모아
+            print('카모아 전용 결제하기 누름')
+        else:
+            wait.until(EC.element_to_be_clickable((By.XPATH, '(//*[@text="결제하기"])[2]'))).click()  # 티맵
+            print('티맵 전용 결제하기 누름')
+    print('안심플러스 금액 =', ansim_amount)
+    return ansim_amount
 
+
+def cancel_Process(wait,driver,scroll_wait,amount,what):
+    down_swipe(driver)
+    if what != 'month':
+        down_swipe(driver)
+        down_swipe(driver)
+        down_swipe(driver)
+        down_swipe(driver)
+        down_swipe(driver)
+        down_swipe(driver)
+        down_swipe(driver)
+        #안정적으로 하기 위해서.
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약취소"]'))).click()
+    if what == 'month':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="월렌트 예약 취소"]')))
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"본인은 해당 월렌트 예약 취소 약관에 동의합니다.")]'))).click()
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="확인"]'))).click()
+    else:
+        sleep(3)
+        try:
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약을 취소하시겠습니까?"]')))
+        except:
+            # 안눌렸을 때를 대비하여 다시 선택 하기
+            down_swipe(driver)
+            down_swipe(driver)
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약취소"]'))).click()
+        sleep(3)
+        #예약취소화면
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약을 취소하시겠습니까?"]')))
+    if what == 'hotel':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="호텔을 이용할 일정이 아예 취소 또는 연기되어서"]'))).click()
+    else:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="차량 배달 주소 변경"]'))).click()
+    while_loop('//*[@text="간편카드결제"]', driver, 'down_find', 1500)
+    while_loop('//*[contains(@text,"' + amount + '")]', driver, 'down_find', 2000)
+    down_swipe(driver)
+    down_swipe(driver)
+    down_swipe(driver)
+    down_swipe(driver)
+    if what == 'hotel':
+        while_loop('//*[@text="예약취소"]', driver, 'down_click', 2000)
+    else:
+        while_loop('//*[@text="예약 취소하기"]', driver, 'down_click', 2000)
+    sleep(5)
+    # 예약취소완료
+    if what != 'hotel':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약취소 완료"]')))
+    else:
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약 취소 완료"]')))
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"' + amount + '")]')))
+    down_swipe(driver)
+    down_swipe(driver)
+    down_swipe(driver)
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.Button[@text="확인"]'))).click()
+
+def addOn(where,wait, driver, type,select):
+    # 결제정보_추가옵션 영역, 추가 인원 선택 진행
+    if type == 'hikari' or type == 'sicily':
+        down_swipe(driver)
+        down_swipe(driver)
+        if where == '결제정보':
+            while_loop('//*[contains(@text,"추가옵션(선택사항)")]', driver, 'down_click', 1800)
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"추가 옵션은 예약과 함께 해당 렌트카 업체에 요청됩니다.")]')))
+        else:
+            # 차량상세 일 때
+            while_loop('//*[@text="추가 옵션 정보"]', driver,'down_find', 1500)
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"렌트카 업체에서 제공 가능한 옵션입니다.")]')))
+        if type == 'hikari':
+            if select == '토요타':
+                while_loop('//*[contains(@text,"내비게이션")]', driver, 'down_click', 2000)
+                wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"무료")]')))
+            elif select == '유럽카':
+                # 유럽카일 때
+                while_loop('//*[contains(@text,"카시트")]', driver, 'down_click', 2000)
+                wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"1개")]')))
+                wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"EUR")]')))
+        elif type == 'sicily':
+            while_loop('//*[contains(@text,"Baby seats")]', driver, 'down_click', 2000)
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"EUR")]')))
+            down_swipe(driver)
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"대여기간 동안")]'))) # 아래쪽 추가 옵션으로 인식 안되는 경우 발생
+        if where == '결제정보':
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="확인"]'))).click()  # 팝업 닫기
+    else:
+        #추가 옵션 없는 상품들
+        pass
 
 def freeCancel(now,startD,check,wait,m):
     start = now + timedelta(days=startD)
@@ -269,12 +514,12 @@ def Cancel_table(wait,table):
         n = n + 1  # 테이블 행
         a = a + 2  # 테이블 열
 # str(today.year),  str(today.strftime('%m')) ,  str(today.strftime('%d'))
-def select_Date(now,day):
-    today = now + timedelta(days=day)
-    selecttoday = str(today.year) + "-" + str(today.strftime('%m')) + "-" + str(today.strftime('%d'))
-
-    return selecttoday
-
+def select_Date(now,wait):
+    today = now + timedelta(days=5)
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="'+str(today.strftime('%d'))+'"]'))).click()
+    sleep(2)
+    today2 = now + timedelta(days=6)
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="' + str(today2.strftime('%d')) + '"]'))).click()
 # # 임박예약 시의 최소 시간 계산 함수
 # def min_time(now,day,type):
 #     #timedelta(days=-3, hours=2, minutes=-10)
@@ -306,7 +551,7 @@ def check_Date(now,day):
 def down_swipe(driver):
     sleep(2)
     if username == 'joy':
-        driver.swipe(300, 1500, 300, 1000, 20)
+        driver.swipe(300, 1000, 300, 500, 20)
     if username == 'levi':  # elif 추가 및 좌표 수정(levi)
         driver.swipe(300, 1000, 300, 800, 1000)
     sleep(2)
@@ -328,123 +573,88 @@ def up_swipe(driver):
     sleep(2)
 
 
-def while_loop(self,target,driver,scroll_wait,what,line):
+def while_loop(target,driver,what,line):
+    wait = WebDriverWait(driver,5)
     num = 0
-    if what == 'down_find' or what == 'down_click':
-        sleep(2)
-        while True:
-            try:
-                if num > 10:
-                    break
+    while num < 10:
+        try:
+            y = wait.until(EC.element_to_be_clickable((By.XPATH, target))).location["y"]
+            if y < line: #인식이 되어도 최소 높이만큼 올라와야 클릭 동작
+                if what == 'down_click' or what == 'up_click':
+                    wait.until(EC.element_to_be_clickable((By.XPATH, target))).click()
                 else:
-                    y = scroll_wait.until(EC.element_to_be_clickable((By.XPATH, target))).location["y"]
-                    if y < line:
-                        if what == 'down_click':
-                            scroll_wait.until(EC.element_to_be_clickable((By.XPATH, target))).click()
-                        else:
-                            scroll_wait.until(EC.element_to_be_clickable((By.XPATH, target)))
-                        break
-                    else:
-                        self.assertEqual(0, 1)
-            except:
-                down_swipe(driver)
-                num = num+1
-    elif what == 'up_find' or what == 'up_click':
-        sleep(2)
-        while True:
-            num=num+1
-            try:
-                if num > 10:
-                    break
+                    wait.until(EC.element_to_be_clickable((By.XPATH, target)))
+                break
+            else:
+                if what == 'down_find' or what == 'down_click':
+                    down_swipe(driver)
                 else:
-                    y = scroll_wait.until(EC.element_to_be_clickable((By.XPATH, target))).location["y"]
-                    if y > line:
-                        if what == 'up_click':
-                            scroll_wait.until(EC.element_to_be_clickable((By.XPATH, target))).click()
-                        else:
-                            scroll_wait.until(EC.element_to_be_clickable((By.XPATH, target)))
-                        break
-                    else:
-                        self.assertEqual(0, 1)
-            except:
-                up_swipe(driver)
+                    up_swipe(driver)
                 num = num + 1
+        except:
+            #인식이 되지 않음
+            if what == 'down_find' or what == 'down_click':
+                down_swipe(driver)
+            else:
+                up_swipe(driver)
+            num = num + 1
 
-def while_click_back(target,driver,scroll_wait):
-    count = 0
-    while True:
+def change_type(want,wait):
+    sleep(2)
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="최근 검색"]')))
+    wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("괌")
+    sleep(2)
+    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"국가ㆍ괌")]'))).click()
+    sleep(2)
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="괌"]')))
+    if want == 'package':
+        #패키지로 변환
         try:
-            scroll_wait.until(EC.presence_of_element_located((By.XPATH, target))).click()
-            break
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"운전자 연령")]')))  # 패키지 상태
         except:
-            driver.back()
-            driver.back()
-            driver.back()
-            count = count+1
-        if count == 5:
-            break
-
-def Payment(what,wait,who,pay):
-    #what = 'ktx','jeju','k_short', 'month', 'overseas'
-    if what == 'jeju' or what == 'k_short' or what == 'month' or what == 'hotel':
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"결제하기")]'))).click() #단기렌트, 월렌트
-    elif what == 'o_short_direct' or what == 'o_short_api':
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"예약하기")]'))).click() #해외렌트
-    elif what == 'insurance':
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="다음"]'))).click()
+            # 패키지 안되어 있는걸로 판단되어 패키지로 전환
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"함께 예약")]'))).click()  # 패키지 변환
+            sleep(2)
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"운전자 연령")]')))
     else:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"예매하기")]'))).click() #ktx
-    sleep(3)
-    if what == 'jeju':
+        # 단독으로 변환
         try:
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="혜택 받지 않기"]'))).click() #정형화되었을 때 뜨는 팝업 (제주 리본/파트너스 , 내륙 아직 미적용)
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"운전자 연령")]')))  # 패키지 상태
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"함께 예약")]'))).click()  # 패키지 변환
         except:
-            print("정형화 되지 않은 업체 입니다 -> 확인 필요")
-    else:
-        pass
-    if what == 'o_short_direct' or what == 'o_short_api':
-        try:
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click() #운전자 나이로 인한 가격 변동
-            print("가격 변동 있음")
-        except:
-            print("가격 변동 없음")
-    else:
-        pass
-    # 최종 결제 확인 모달 결제하기 클릭ㅈ
-    if what == 'insurance':
-        pass
-    else:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="결제하기"]'))).click()
-    sleep(3)
-    #토스 위젯 진입
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="결제 방법"]')))
+            pass
+def hotel_datePick(driver,wait):
     try:
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="'+pay+'"]'))).click()
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="체크인 from-to 체크아웃"]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="일정 선택"]')))
+        sleep(2)
+        down_swipe(driver)
+        down_swipe(driver)
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//*[@text="28"])[2]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '(//*[@text="29"])[2]'))).click()
+        try:
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="1박"]')))
+        except:
+            wait.until(EC.presence_of_element_located((By.XPATH, '(//*[@text="28"])[2]'))).click()
+            sleep(2)
+            wait.until(EC.presence_of_element_located((By.XPATH, '(//*[@text="29"])[2]'))).click()
+            wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="1박"]')))
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="적용하기"]'))).click()
+        sleep(2)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"1박")]')))
     except:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"더보기")]'))).click()
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="'+pay+'"]'))).click()
-    if pay == '신용·체크카드':
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="카카오뱅크"]')))
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="농협"]'))).click()
-    if pay == '간편카드결제':
-        pass
-    else:
-        if who == 'carmore':
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="결제하기"]'))).click()  # 카모아
-        else:
-            wait.until(EC.element_to_be_clickable((By.XPATH, '(//*[@text="결제하기"])[2]'))).click() #티맵
-    sleep(3)
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"1박")]')))
+        print('날짜 선택 되어 있음')
 
-def firstStart(wait):
-    try:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="홈"]')))
-    except:
-        server(wait)
 
 def NaverPay(what,who,driver,wait):
     sleep(2)
     pay = '네이버페이'
     Payment(what,wait,who,pay)
+    sleep(5)
     try:
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"카모아")]')))  # 결제 헤더가 있어서 결제 -> 카모아로 인식 단어 바꿈
     except:
@@ -463,24 +673,27 @@ def NaverPay(what,who,driver,wait):
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"카모아")]')))
     if what == 'month':
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"월렌트")]')))
-    elif what == 'hotel':
+    elif what == 'solo':
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"호텔모아")]')))
+    elif what == 'package':
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"패키지")]')))
     elif what == 'insurance':
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"여행자 보험")]')))
     else:
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"단기렌트")]')))  # 월렌트 1개월도 생김
-    driver.back()
-    try:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()  # 앱
-    except:
+    if what == 'k_dev' or what == 'o_dev' or what =='h_dev':
         pass
-    try:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="이 페이지 나가기"]'))).click()  # 웹 (티맵)
-    except:
-        pass
-    driver.back()
-    driver.back()
-    driver.back()
+    else:
+        driver.back()
+        try:
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()
+        except:
+            pass
+
+        driver.back()
+        driver.back()
+        driver.back()
+        driver.back()
     print("Module-Naver pay 완료")
 
 def KakaoPay(what,who,driver,wait):
@@ -488,7 +701,7 @@ def KakaoPay(what,who,driver,wait):
     pay = '카카오페이'
     Payment(what, wait, who, pay)
     sleep(5)
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="다음"]')))
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"다음")]')))
     driver.back()
     try:
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()  # 앱
@@ -504,8 +717,9 @@ def KakaoPay(what,who,driver,wait):
 def SimpleCardPay(what,who,wait): #월렌트 2개월 이상 테스트에서는 사용하지 않는 모듈
     sleep(2)
     pay = '간편카드결제'
-    Payment(what, wait, who, pay)
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="일시불"]')))
+    ansim_amount = Payment(what, wait, who, pay)
+    return ansim_amount
+
 
 def CompanyCardPay(what,who,wait): # KTX 법인 카드 결제용 모듈
     sleep(2)
@@ -548,10 +762,6 @@ def TossPay(what,who,driver,wait):
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()  # 앱
     except:
         pass
-    try:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="이 페이지 나가기"]'))).click()  # 웹 (티맵)
-    except:
-        pass
     driver.back()
     driver.back()
 
@@ -579,20 +789,13 @@ def Account_Transfer(what,who,driver,wait):
     driver.back()
 
 def Insert_info(wait,driver):
-    wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("팀오투테스트_자동화")
+    wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("자동화")
     sleep(2)
     try:
-        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"102s1")]')))
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"1021")]')))
     except:
         wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[2]'))).click()
         sleep(3)
-        # List Of Key codes:
-        # a - z-> 29 - 54
-        # "0" - "9"-> 7 - 16
-        # BACK BUTTON - 4, MENU BUTTON - 82
-        # UP-19, DOWN-20, LEFT-21, RIGHT-22
-        # SELECT (MIDDLE) BUTTON - 23
-        # SPACE - 62, SHIFT - 59, ENTER - 66, BACKSPACE - 67
         birth = [16, 14, 8, 7, 9, 8, 66]  # 안드로이드 키패드 기준 : 971021 - 2 + 엔터(66)
         for i in range(0, len(birth), 1):
             driver.press_keycode(birth[i])
@@ -621,12 +824,12 @@ def Insert_info(wait,driver):
         wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="인증 완료"]')))
 
     sleep(2)
-    wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText)[4]'))).click()
-    wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText)[4]'))).send_keys("joy@teamo2.kr")
+    wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText)[5]'))).click()
+    wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText)[5]'))).send_keys("joy@teamo2.kr")
     driver.back()
     sleep(2)
 
-def Hotel_Insert_info(self,wait,driver,type):
+def Hotel_Insert_info(country,wait,driver,type):
     wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("AutoTest")
     sleep(2)
     wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[2]'))).send_keys("CARMORE")
@@ -650,30 +853,50 @@ def Hotel_Insert_info(self,wait,driver,type):
         wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="인증 완료"]')))
     short_swipe(driver)
     try:
-        wait.until(EC.presence_of_element_located((By.XPATH, '//*[@text="joy@teamo2.kr"]')))
+        wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"@")]'))) #이메일 이미 입력되어 있는 상태
     except:
         wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText[@text=""])[1]'))).send_keys("joy@teamo2.kr")
-    sleep(3)
-    while_loop(self,'//*[contains(@text,"예약자와 숙박자 정보가 같습니다")]', driver, wait, 'down_click', 1900)
+    sleep(2)
+    down_swipe(driver)
+    sleep(2)
     if type == 'package':
-        while_loop(self,'//*[contains(@text,"운전자 정보")]', driver, wait, 'down_click', 1500)
+        if country == 'overseas':
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약자와 숙박자, 운전자 정보가 같습니다"]'))).click()
+        else:
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="예약자와 숙박자 정보가 같습니다"]'))).click()
+        while_loop('//*[@text="이름"]', driver, 'down_find', 1500)
+        try:
+            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@hint="이름"]'))).send_keys("조이")
+        except:
+            pass
         sleep(2)
         try:
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@hint="이름"]'))).send_keys("팀오투테스트_자동화")
-            wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="생년월일"]'))).click()
-            birth = [16, 14, 8, 7, 9, 8, 9, 66]  # 안드로이드 키패드 기준 : 971021 - 2 + 엔터(66)
+            while_loop('//*[@text="생년월일"]', driver, 'down_click', 1500)
+            birth = [16, 14, 8, 7, 9, 8, 9]  # 안드로이드 키패드 기준 : 971021 - 2 + 엔터(66)
             for i in range(0, len(birth), 1):
                 driver.press_keycode(birth[i])
                 sleep(1)
             sleep(3)
             wait.until(EC.element_to_be_clickable((By.XPATH, '//*[contains(@text,"1021")]')))  # 입력 확인
-            # down_swipe(driver)
-            # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@hint="휴대폰번호"]'))).send_keys("01082630856")
-            driver.back()
+            try:
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@hint="휴대폰 번호"]'))).send_keys("01082630856")
+            except:
+                wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="010-8263-0856"]')))
         except:
             pass
+    else:
+        while_loop('//*[contains(@text,"예약자와 숙박자 정보가 같습니다")]', driver, 'down_click', 1900)
+    if country == 'overseas':
+        sleep(2)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '(//*[@text="성별"])[2]'))).click()
+        sleep(10)
+        wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="여성"]'))).click()
+    else:
+        pass
+
 def insurance_Insert_info(wait,driver,age,country):
-    wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("자동화테스트")
+    wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[1]'))).send_keys("조이")
+    driver.press_keycode(66)
     sleep(2)
     if country == 'overseas':
         wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[2]'))).click()
@@ -683,6 +906,7 @@ def insurance_Insert_info(wait,driver,age,country):
         wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EdidtText)[3]'))).send_keys("JUNGEUN")
         driver.back()
     sleep(3)
+    driver.press_keycode(66)
     if country == 'overseas':
         wait.until(EC.presence_of_element_located((By.XPATH, '(//android.widget.EditText)[4]'))).click()
     else:
@@ -728,7 +952,6 @@ def insurance_Insert_info(wait,driver,age,country):
     wait.until(EC.element_to_be_clickable((By.XPATH, '//android.widget.CheckedTextView[@text="여자"]'))).click()
     sleep(2)
     wait.until(EC.element_to_be_clickable((By.XPATH, '//android.view.View[@text="여자"]')))
-    wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="540원"]')))
     # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="다음"]'))).click()
     # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="대표자의 휴대폰 번호를 입력해 주세요"]')))
     # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()
@@ -737,6 +960,7 @@ def insurance_Insert_info(wait,driver,age,country):
     else:
         wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText)[3]'))).send_keys("01082630856")
     sleep(2)
+    driver.press_keycode(66)
     driver.back()
     sleep(2)
     if country == 'overseas':
@@ -744,6 +968,7 @@ def insurance_Insert_info(wait,driver,age,country):
     else:
         wait.until(EC.element_to_be_clickable((By.XPATH, '(//android.widget.EditText)[4]'))).send_keys("joy@teamo2.kr")
     wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="joy@teamo2.kr"]')))
+    driver.press_keycode(66)
     sleep(2)
 
 def Cancel(wait,driver,type):
@@ -782,29 +1007,33 @@ def Cancel(wait,driver,type):
         wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@text="확인"]'))).click()
     return reservation
 
-def Fail(title,num,reservation):
-    fail_msg = traceback.format_exc()
+def Fail(title,num,reservation,driver):
+    fail_msg = str(traceback.format_exc()).split('selenium.common.exceptions.TimeoutException')[0]
+    file_path = '/Users/joy/Desktop/screenshot/Android_fail_'+str(now)+'.png'
+    driver.save_screenshot(file_path)
+    # screenshot = driver.get_screenshot_as_png()
+    # pyautogui.screenshot().save('/Users/joy/Desktop/screenshot/fail'+str(now)+'.png')  # 파일로 저장
     if reservation == '':
-        result_fail_msg = str(num) + '. ' + title + " [ FAIL ]" + " : 확인 필요"+'\n'+"```"+str(fail_msg)+"```"
-        result = str(num) + '. ' + title + " [ FAIL ]"
+        result_fail_msg = str(num) + '. ' + title + "______FAIL " + " : 확인 필요"+'\n'+"```"+str(fail_msg)+"```"
+        result = str(num) + '. ' + title + " ______FAIL "
     else:
-        result_fail_msg = str(num) + '. ' + title + " [ FAIL ]" + " : 확인 필요" + '\n' + "```" + str(fail_msg) + "```"
-        result = str(num) + '. ' + title + " [ FAIL ]"
-    print(result)
-    slack_post(result_fail_msg)
+        result_fail_msg = str(num) + '. ' + title + "______FAIL" + " : 확인 필요" + '\n' + "```" + str(fail_msg) + "```"
+        result = str(num) + '. ' + title + "______FAIL "
+    slack_post_img(file_path,result_fail_msg)
+    print(result_fail_msg)
+    print('Fail 이미지 전송 완료',file_path)
 
 def Pass(title,num,reservation):
     if reservation == '':
-        result = str(num) + '. ' + title + " [ PASS ]"
+        result = str(num) + '. ' + title + " ______PASS"
     else:
-        result = str(num) + '. ' + title + " [ PASS ] : " + reservation
+        result = str(num) + '. ' + title + " ______PASS : " + reservation
 
     print(result)
     slack_post(result)
 
 #정렬 변수
-k_rolling ='차종순' #차종순 -> 가격순 변경 시점 : 2023/11/17 -> 차종순 다시 변경 ^^ 2023/11/22
+k_rolling ='인기순' # 차종순 -> 가격순 변경 시점 : 2023/11/17 -> 차종순 다시 변경 ^^ 2023/11/22 -> 인기순 변경 2024/7/16
 j_rolling = '가격순'
 o_rolling= '가격순'
 m_rolling = '가격순'
-
