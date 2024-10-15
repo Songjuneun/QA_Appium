@@ -498,7 +498,7 @@ def hotelMore(wait,driver,type,region):
         Module.while_loop('//*[contains(@text,"요금 상세 정보")]', driver, 'down_find', 1800)
         wait.until(EC.presence_of_element_located((By.XPATH, '//*[contains(@text,"호텔 숙박 요금")]')))
         if type != 'l_ht_dev':
-            if region == '부산':
+            if region == '부산' or region =='제주':
                 Module.while_loop('//*[contains(@text,"보험 요금(")]', driver, 'down_find', 1800) #국내
             else:
                 Module.while_loop('//*[contains(@text,"보험 및 플랜 요금(")]', driver, 'down_find', 1800) #해외
